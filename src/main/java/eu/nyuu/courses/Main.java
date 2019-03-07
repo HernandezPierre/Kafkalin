@@ -2,6 +2,7 @@ package eu.nyuu.courses;
 
 import eu.nyuu.courses.model.AggregateTweet;
 import eu.nyuu.courses.model.TweetEvent;
+import eu.nyuu.courses.model.HashtagsTweet;
 import eu.nyuu.courses.serdes.SerdeFactory;
 import eu.nyuu.courses.Utils;
 
@@ -16,6 +17,7 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.*;
 import org.apache.kafka.streams.state.*;
 
+import java.security.KeyPair;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
@@ -28,7 +30,8 @@ public class Main {
         final Properties streamsConfiguration = new Properties();
 
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, "tweet-stream-group-2");
-        streamsConfiguration.put(StreamsConfig.CLIENT_ID_CONFIG, "tweet-stream-group-2-app-client");
+
+        streamsConfiguration.put(StreamsConfig.CLIENT_ID_CONFIG, "tweet-stream-group-2-client");
         // Where to find Kafka broker(s).
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest");
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
@@ -39,10 +42,19 @@ public class Main {
         final Serde<String> stringSerde = Serdes.String();
         final Map<String, Object> serdeProps = new HashMap<>();
         final Serde<TweetEvent> sensorEventSerde = SerdeFactory.createSerde(TweetEvent.class, serdeProps);
+        final Serde<HashtagsTweet> HashtagsTweet = SerdeFactory.createSerde(HashtagsTweet.class, serdeProps);
 
         final StreamsBuilder streamsBuilder = new StreamsBuilder();
         final KStream<String, TweetEvent> tweetStream = streamsBuilder
             .stream("tweets", Consumed.with(stringSerde, sensorEventSerde));
+
+
+        /////////
+        final KStream<String, HashtagsTweet> hashtagsStream = streamsBuilder
+                .stream("tweets", Consumed.with(stringSerde, HashtagsTweet));
+
+
+        /////////
 
         tweetStream
             .map((key, tweetEvent) -> KeyValue.pair(tweetEvent.getNick(), Utils.sentenceToSentiment(tweetEvent.getBody())))
@@ -111,6 +123,20 @@ public class Main {
                   (aggNick, newSent, aggTweet) -> AggregateTweet.addSent(newSent, aggTweet),
                   Materialized.<String, AggregateTweet, WindowStore<Bytes, byte[]>>as("sentiment-by-day-user-table-store-group2")
                       .withValueSerde(SerdeFactory.createSerde(AggregateTweet.class, serdeProps)));
+
+        KTable<Windowed<String>, Long> hashtagStream = tweetStream
+                .flatMap((k, v) -> {
+                    List<KeyValue<String, String>> result = new LinkedList<>();
+                    for(String s: v.findAllHashtags()) {
+                        result.add(KeyValue.pair(s, v.getId()));
+                    }
+                    return result;
+                })
+                .groupByKey()
+                .windowedBy(TimeWindows.of(Duration.ofMinutes(5)))
+                .count()
+                .filter((k,v)-> v >5);
+
 
         final KafkaStreams streams = new KafkaStreams(streamsBuilder.build(), streamsConfiguration);
 
