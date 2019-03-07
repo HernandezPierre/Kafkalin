@@ -27,8 +27,8 @@ public class Main {
         final String bootstrapServers = args.length > 0 ? args[0] : "51.15.90.153:9092";  // "localhost:29092";
         final Properties streamsConfiguration = new Properties();
 
-        streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, "tweet-stream-group-2-bis-app");
-        streamsConfiguration.put(StreamsConfig.CLIENT_ID_CONFIG, "tweet-stream-group-2-bis-app-client");
+        streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, "tweet-stream-group-2");
+        streamsConfiguration.put(StreamsConfig.CLIENT_ID_CONFIG, "tweet-stream-group-2-app-client");
         // Where to find Kafka broker(s).
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest");
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
@@ -50,12 +50,8 @@ public class Main {
             .aggregate(
                 () -> new AggregateTweet(0L, 0L, 0L, 0L, 0L),
                 (aggNick, newSent, aggTweet) -> AggregateTweet.addSent(newSent, aggTweet),
-                Materialized.<String, AggregateTweet, KeyValueStore<Bytes, byte[]>>as("sentiment-by-user-table-store-grp2-bis")
+                Materialized.<String, AggregateTweet, KeyValueStore<Bytes, byte[]>>as("sentiment-by-user-table-store-group2")
                     .withValueSerde(SerdeFactory.createSerde(AggregateTweet.class, serdeProps)));
-
-        // tweetStream
-        //         .map((key, tweetEvent) -> KeyValue.pair("YEAR", Utils.sentenceToSentiment(tweetEvent.getBody())))
-        //         .to("debug-grp2-year");
 
         tweetStream
             .map((key, tweetEvent) -> KeyValue.pair("YEAR", Utils.sentenceToSentiment(tweetEvent.getBody())))
@@ -64,8 +60,8 @@ public class Main {
             .aggregate(
                 () -> new AggregateTweet(0L, 0L, 0L, 0L, 0L),
                 (agg, newSent, aggTweet) -> AggregateTweet.addSent(newSent, aggTweet),
-
-                    Materialized.with(stringSerde, SerdeFactory.createSerde(AggregateTweet.class, serdeProps))).toStream().print(Printed.toSysOut());
+                    Materialized.<String, AggregateTweet, WindowStore<Bytes, byte[]>>as("sentiment-by-year-table-store-group2")
+                            .withValueSerde(SerdeFactory.createSerde(AggregateTweet.class, serdeProps)));
 
         tweetStream
             .map((key, tweetEvent) -> KeyValue.pair("MONTH", Utils.sentenceToSentiment(tweetEvent.getBody())))
@@ -74,7 +70,7 @@ public class Main {
             .aggregate(
                  () -> new AggregateTweet(0L, 0L, 0L, 0L, 0L),
                  (aggNick, newSent, aggTweet) -> AggregateTweet.addSent(newSent, aggTweet),
-                 Materialized.<String, AggregateTweet, WindowStore<Bytes, byte[]>>as("sentiment-by-month-table-store-grp2")
+                 Materialized.<String, AggregateTweet, WindowStore<Bytes, byte[]>>as("sentiment-by-month-table-store-group2")
                     .withValueSerde(SerdeFactory.createSerde(AggregateTweet.class, serdeProps)));
 
         tweetStream
@@ -82,10 +78,39 @@ public class Main {
             .groupByKey()
             .windowedBy(TimeWindows.of(Duration.ofDays(1L)))
             .aggregate(
-                () -> new AggregateTweet(0L, 0L, 0L, 0L, 0L),
-                (aggNick, newSent, aggTweet) -> AggregateTweet.addSent(newSent, aggTweet),
-                Materialized.<String, AggregateTweet, WindowStore<Bytes, byte[]>>as("sentiment-by-day-table-store-grp2")
-                    .withValueSerde(SerdeFactory.createSerde(AggregateTweet.class, serdeProps)));
+                 () -> new AggregateTweet(0L, 0L, 0L, 0L, 0L),
+                 (aggNick, newSent, aggTweet) -> AggregateTweet.addSent(newSent, aggTweet),
+                 Materialized.<String, AggregateTweet, WindowStore<Bytes, byte[]>>as("sentiment-by-day-table-store-group2")
+                     .withValueSerde(SerdeFactory.createSerde(AggregateTweet.class, serdeProps)));
+
+        tweetStream
+            .map((key, tweetEvent) -> KeyValue.pair(tweetEvent.getNick(), Utils.sentenceToSentiment(tweetEvent.getBody())))
+            .groupByKey()
+            .windowedBy(TimeWindows.of(Duration.ofDays(365L)))
+            .aggregate(
+                  () -> new AggregateTweet(0L, 0L, 0L, 0L, 0L),
+                  (agg, newSent, aggTweet) -> AggregateTweet.addSent(newSent, aggTweet),
+                  Materialized.<String, AggregateTweet, WindowStore<Bytes, byte[]>>as("sentiment-by-year-user-table-store-group2")
+                      .withValueSerde(SerdeFactory.createSerde(AggregateTweet.class, serdeProps)));
+        tweetStream
+            .map((key, tweetEvent) -> KeyValue.pair(tweetEvent.getNick(), Utils.sentenceToSentiment(tweetEvent.getBody())))
+            .groupByKey()
+            .windowedBy(TimeWindows.of(Duration.ofDays(30L)))
+            .aggregate(
+                 () -> new AggregateTweet(0L, 0L, 0L, 0L, 0L),
+                 (aggNick, newSent, aggTweet) -> AggregateTweet.addSent(newSent, aggTweet),
+                 Materialized.<String, AggregateTweet, WindowStore<Bytes, byte[]>>as("sentiment-by-month-user-table-store-group2")
+                     .withValueSerde(SerdeFactory.createSerde(AggregateTweet.class, serdeProps)));
+
+        tweetStream
+             .map((key, tweetEvent) -> KeyValue.pair(tweetEvent.getNick(), Utils.sentenceToSentiment(tweetEvent.getBody())))
+             .groupByKey()
+             .windowedBy(TimeWindows.of(Duration.ofDays(1L)))
+             .aggregate(
+                  () -> new AggregateTweet(0L, 0L, 0L, 0L, 0L),
+                  (aggNick, newSent, aggTweet) -> AggregateTweet.addSent(newSent, aggTweet),
+                  Materialized.<String, AggregateTweet, WindowStore<Bytes, byte[]>>as("sentiment-by-day-user-table-store-group2")
+                      .withValueSerde(SerdeFactory.createSerde(AggregateTweet.class, serdeProps)));
 
         final KafkaStreams streams = new KafkaStreams(streamsBuilder.build(), streamsConfiguration);
 
@@ -95,20 +120,17 @@ public class Main {
         // Add shutdown hook to respond to SIGTERM and gracefully close Kafka Streams
         Runtime.getRuntime().addShutdownHook(new Thread(streams::close));
 
-        try {
-            Thread.sleep(Duration.ofMinutes(1).toMillis());
-        } catch (Exception e) {
-            System.out.println("Oh no it's broken ! SO LOLOLOLOLOLOLOLOL !");
-        }
+        try { Thread.sleep(Duration.ofMinutes(1).toMillis()); }
+        catch (Exception e) { System.out.println("Oh no it's broken ! SO LOLOLOLOLOLOLOLOL !"); }
 
         while (true) {
             if (streams.state() == KafkaStreams.State.RUNNING) {
                 // Querying our local store
                 ReadOnlyKeyValueStore<String,AggregateTweet> aggregateTweetStore =
-                        streams.store("sentiment-by-user-table-store-grp2-bis",
+                        streams.store("sentiment-by-user-table-store-group2",
                                 QueryableStoreTypes.keyValueStore());
                 ReadOnlyWindowStore<String,AggregateTweet> aggregateYearsTweetStore =
-                        streams.store("sentiment-by-year-table-store-grp2",
+                        streams.store("sentiment-by-year-table-store-group2",
                                 QueryableStoreTypes.windowStore());
 
                 System.out.println("Sentiment by users !");
@@ -139,11 +161,8 @@ public class Main {
             }
 
             // Dumping all keys every minute
-            try {
-                Thread.sleep(Duration.ofMinutes(1).toMillis());
-            } catch (Exception e) {
-                System.out.println("Oh no it's broken ! SO LOLOLOLOLOLOLOLOL !");
-            }
+            try { Thread.sleep(Duration.ofMinutes(1).toMillis()); }
+            catch (Exception e) { System.out.println("Oh no it's broken ! SO LOLOLOLOLOLOLOLOL !"); }
 
         }
     }

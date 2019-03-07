@@ -1,7 +1,12 @@
 package eu.nyuu.courses.model;
 
+import org.apache.kafka.common.protocol.types.Field;
+
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.regex.*;
 
 public class TweetEvent {
     private String id;
@@ -41,4 +46,15 @@ public class TweetEvent {
     public void setBody(String body) { this.body = body; }
 
     public void setTimestamp(String timestamp) { this.timestamp = timestamp; }
+
+    public List<String> findAllHashtags() {
+        List<String> hashtags = new ArrayList<String>();
+        Pattern pattern = Pattern.compile(this.body);
+        Matcher matcher = pattern.matcher("#(\\w+)");
+        if (matcher.matches()) {
+            for(int i=0; i <= matcher.groupCount(); i++)
+                hashtags.add(matcher.group(i));
+        }
+        return hashtags;
+    }
 }
