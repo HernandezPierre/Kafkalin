@@ -27,7 +27,8 @@ public class Main {
         final Properties streamsConfiguration = new Properties();
 
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, "tweet-stream-group-2");
-        streamsConfiguration.put(StreamsConfig.CLIENT_ID_CONFIG, "tweet-stream-group-2-app-client");
+
+        streamsConfiguration.put(StreamsConfig.CLIENT_ID_CONFIG, "tweet-stream-group-2-client");
         // Where to find Kafka broker(s).
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest");
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
@@ -118,6 +119,19 @@ public class Main {
                   (aggNick, newSent, aggTweet) -> AggregateTweet.addSent(newSent, aggTweet),
                   Materialized.<String, AggregateTweet, WindowStore<Bytes, byte[]>>as("sentiment-by-day-user-table-store-group2")
                       .withValueSerde(SerdeFactory.createSerde(AggregateTweet.class, serdeProps)));
+
+        KGroupedStream<String, String> hashtagsByKey = tweetStream
+                .flatMap((k, v) -> {
+                    List<KeyValue<String, String>> result = new LinkedList<>();
+                    for(String s: v.findAllHashtags()) result.add(KeyValue.pair(s, v.getId()));
+                    return result;
+                }).groupByKey();
+
+        // Get most popular hashtags for the last month
+        hashtagsByKey.windowedBy(TimeWindows.of(Duration.ofDays(30L))).count().filter((k,v) -> v > 5);
+
+        // Get most popular hashtags for the last year
+        hashtagsByKey.windowedBy(TimeWindows.of(Duration.ofDays(365))).count().filter((k,v) -> v > 5);
 
         final KafkaStreams streams = new KafkaStreams(streamsBuilder.build(), streamsConfiguration);
 
