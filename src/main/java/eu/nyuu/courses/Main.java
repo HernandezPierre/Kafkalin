@@ -14,10 +14,7 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.*;
-import org.apache.kafka.streams.state.KeyValueIterator;
-import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.QueryableStoreTypes;
-import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
+import org.apache.kafka.streams.state.*;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -56,6 +53,40 @@ public class Main {
                 Materialized.<String, AggregateTweet, KeyValueStore<Bytes, byte[]>>as("sentiment-by-user-table-store-grp2-bis")
                     .withValueSerde(SerdeFactory.createSerde(AggregateTweet.class, serdeProps)));
 
+        // tweetStream
+        //         .map((key, tweetEvent) -> KeyValue.pair("YEAR", Utils.sentenceToSentiment(tweetEvent.getBody())))
+        //         .to("debug-grp2-year");
+
+        tweetStream
+            .map((key, tweetEvent) -> KeyValue.pair("YEAR", Utils.sentenceToSentiment(tweetEvent.getBody())))
+            .groupByKey()
+            .windowedBy(TimeWindows.of(Duration.ofDays(365L)))
+            .aggregate(
+                () -> new AggregateTweet(0L, 0L, 0L, 0L, 0L),
+                (agg, newSent, aggTweet) -> AggregateTweet.addSent(newSent, aggTweet),
+
+                    Materialized.with(stringSerde, SerdeFactory.createSerde(AggregateTweet.class, serdeProps))).toStream().print(Printed.toSysOut());
+
+        tweetStream
+            .map((key, tweetEvent) -> KeyValue.pair("MONTH", Utils.sentenceToSentiment(tweetEvent.getBody())))
+            .groupByKey()
+            .windowedBy(TimeWindows.of(Duration.ofDays(30L)))
+            .aggregate(
+                 () -> new AggregateTweet(0L, 0L, 0L, 0L, 0L),
+                 (aggNick, newSent, aggTweet) -> AggregateTweet.addSent(newSent, aggTweet),
+                 Materialized.<String, AggregateTweet, WindowStore<Bytes, byte[]>>as("sentiment-by-month-table-store-grp2")
+                    .withValueSerde(SerdeFactory.createSerde(AggregateTweet.class, serdeProps)));
+
+        tweetStream
+            .map((key, tweetEvent) -> KeyValue.pair("DAY", Utils.sentenceToSentiment(tweetEvent.getBody())))
+            .groupByKey()
+            .windowedBy(TimeWindows.of(Duration.ofDays(1L)))
+            .aggregate(
+                () -> new AggregateTweet(0L, 0L, 0L, 0L, 0L),
+                (aggNick, newSent, aggTweet) -> AggregateTweet.addSent(newSent, aggTweet),
+                Materialized.<String, AggregateTweet, WindowStore<Bytes, byte[]>>as("sentiment-by-day-table-store-grp2")
+                    .withValueSerde(SerdeFactory.createSerde(AggregateTweet.class, serdeProps)));
+
         final KafkaStreams streams = new KafkaStreams(streamsBuilder.build(), streamsConfiguration);
 
         streams.cleanUp();
@@ -75,22 +106,36 @@ public class Main {
                 // Querying our local store
                 ReadOnlyKeyValueStore<String,AggregateTweet> aggregateTweetStore =
                         streams.store("sentiment-by-user-table-store-grp2-bis",
-                                      QueryableStoreTypes.keyValueStore());
+                                QueryableStoreTypes.keyValueStore());
+                ReadOnlyWindowStore<String,AggregateTweet> aggregateYearsTweetStore =
+                        streams.store("sentiment-by-year-table-store-grp2",
+                                QueryableStoreTypes.windowStore());
 
-                // fetching all values for the last minute in the window
-                // Instant now = Instant.now();
-                // Instant lastMinute = now.minus(Duration.ofMinutes(1));
-
-                KeyValueIterator<String, AggregateTweet> iterator = aggregateTweetStore.all();
-                while (iterator.hasNext()) {
-                    KeyValue<String, AggregateTweet> next = iterator.next();
+                System.out.println("Sentiment by users !");
+                KeyValueIterator<String, AggregateTweet> userSentimentIterator = aggregateTweetStore.all();
+                while (userSentimentIterator.hasNext()) {
+                    KeyValue<String, AggregateTweet> next = userSentimentIterator.next();
                     System.out.println(String.format("{user: %s, sentiment: {very_negative: %d, negative: %d, " +
-                            "neutral: %d, positive: %d, very_positive: %d}}", next.key, next.value.getVeryNegative(),
+                        "neutral: %d, positive: %d, very_positive: %d}}", next.key, next.value.getVeryNegative(),
+                        next.value.getNegative(), next.value.getNeutral(), next.value.getPositive(),
+                        next.value.getVeryPositive()));
+                }
+                userSentimentIterator.close();
+
+                System.out.println("Sentiment by years !");
+                // fetching all values for the last year in the window
+                Instant now = Instant.now();
+                Instant lastYear = now.minus(Duration.ofDays(365L));
+                KeyValueIterator<Windowed<String>, AggregateTweet> sentimentByYearIterator = aggregateYearsTweetStore.fetchAll(lastYear, now);
+                while (sentimentByYearIterator.hasNext()) {
+                    KeyValue<Windowed<String>, AggregateTweet> next = sentimentByYearIterator.next();
+                    System.out.println(String.format("{year: %s, sentiment: {very_negative: %d, negative: %d, " +
+                                    "neutral: %d, positive: %d, very_positive: %d}}", next.key, next.value.getVeryNegative(),
                             next.value.getNegative(), next.value.getNeutral(), next.value.getPositive(),
                             next.value.getVeryPositive()));
                 }
                 // close the iterator to release resources
-                iterator.close();
+                sentimentByYearIterator.close();
             }
 
             // Dumping all keys every minute
