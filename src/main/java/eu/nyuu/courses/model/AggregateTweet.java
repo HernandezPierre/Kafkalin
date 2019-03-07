@@ -1,5 +1,8 @@
 package eu.nyuu.courses.model;
 
+/**
+ * Aggregate sentiment for a group of tweet
+ */
 public class AggregateTweet {
     private Long veryNegative;
     private Long negative;
@@ -47,6 +50,12 @@ public class AggregateTweet {
 
     public void setVeryPositive(Long veryPositive) { this.veryPositive = veryPositive; }
 
+    /**
+     * Add a sentiment to an existing `AggregateTweet`
+     * @param sent The sentiment to add
+     * @param aggTweet The AggregateTweet to aggregate on
+     * @return The new aggregated tweet
+     */
     public static AggregateTweet addSent(String sent, AggregateTweet aggTweet) {
         switch (sent) {
             case "VERY_NEGATIVE":

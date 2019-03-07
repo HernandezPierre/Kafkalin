@@ -1,13 +1,14 @@
 package eu.nyuu.courses.model;
 
-import org.apache.kafka.common.protocol.types.Field;
-
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.*;
 
+/**
+ * A tweet event from Kafka
+ */
 public class TweetEvent {
     private String id;
     private String nick;
@@ -47,6 +48,10 @@ public class TweetEvent {
 
     public void setTimestamp(String timestamp) { this.timestamp = timestamp; }
 
+    /**
+     * Find all hashtags for a tweet
+     * @return A list of hashtags for a tweet
+     */
     public List<String> findAllHashtags() {
         List<String> hashtags = new ArrayList<String>();
         Pattern pattern = Pattern.compile(this.body);
