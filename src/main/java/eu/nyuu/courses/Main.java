@@ -1,6 +1,7 @@
 package eu.nyuu.courses;
 
 import eu.nyuu.courses.model.AggregateTweet;
+import eu.nyuu.courses.model.HashtagsTweet;
 import eu.nyuu.courses.model.TweetEvent;
 import eu.nyuu.courses.serdes.SerdeFactory;
 import eu.nyuu.courses.utils.Utils;
@@ -128,10 +129,16 @@ public class Main {
                 }).groupByKey();
 
         // Get most popular hashtags for the last month
-        hashtagsByKey.windowedBy(TimeWindows.of(Duration.ofDays(30L))).count().filter((k,v) -> v > 5);
+        hashtagsByKey
+                .windowedBy(TimeWindows.of(Duration.ofDays(30L)))
+                .count(Materialized.<String, Long, WindowStore<Bytes, byte[]>>as("hashtags-by-month-table-store-group2"))
+                .filter((k,v) -> v > 5);
 
         // Get most popular hashtags for the last year
-        hashtagsByKey.windowedBy(TimeWindows.of(Duration.ofDays(365))).count().filter((k,v) -> v > 5);
+        hashtagsByKey.windowedBy(TimeWindows.of(Duration.ofDays(365)))
+                .count(Materialized.<String, Long, WindowStore<Bytes, byte[]>>as("hashtags-by-year-table-store-group2"))
+                .filter((k,v) -> v > 5);
+
 
         final KafkaStreams streams = new KafkaStreams(streamsBuilder.build(), streamsConfiguration);
 
