@@ -43,7 +43,7 @@ public class TweetQuery {
      * @throws Exception
      */
     public static List<TweetQuery> sentimentsByUser(KafkaStreams streams) throws Exception {
-        if (streams.state() != KafkaStreams.State.RUNNING) throw new Exception("KafkaStreams not running");
+        // if (streams.state() != KafkaStreams.State.RUNNING) throw new Exception("KafkaStreams not running");
         List<TweetQuery> sentimentsByUser = new ArrayList<>();
         ReadOnlyKeyValueStore<String,AggregateTweet> aggregateTweetStore =
             streams.store("sentiment-by-user-table-store-group2", QueryableStoreTypes.keyValueStore());
@@ -64,7 +64,7 @@ public class TweetQuery {
      * @throws Exception
      */
     public static List<TweetQuery> sentimentsByYear(KafkaStreams streams, boolean byUser) throws Exception {
-        if (streams.state() != KafkaStreams.State.RUNNING) throw new Exception("KafkaStreams not running");
+        // if (streams.state() != KafkaStreams.State.RUNNING) throw new Exception("KafkaStreams not running");
         String storeName;
         if (byUser) storeName = "sentiment-by-year-table-store-group2";
         else storeName = "sentiment-by-year-user-table-store-group2";
@@ -79,7 +79,7 @@ public class TweetQuery {
      * @throws Exception
      */
     public static List<TweetQuery> sentimentsByMonth(KafkaStreams streams, boolean byUser) throws Exception {
-        if (streams.state() != KafkaStreams.State.RUNNING) throw new Exception("KafkaStreams not running");
+        // if (streams.state() != KafkaStreams.State.RUNNING) throw new Exception("KafkaStreams not running");
         String storeName;
         if (byUser) storeName = "sentiment-by-month-table-store-group2";
         else storeName = "sentiment-by-month-user-table-store-group2";
@@ -94,12 +94,14 @@ public class TweetQuery {
      * @throws Exception
      */
     public static List<TweetQuery> sentimentsByDay(KafkaStreams streams, boolean byUser) throws Exception {
-        if (streams.state() != KafkaStreams.State.RUNNING) throw new Exception("KafkaStreams not running");
+        // if (streams.state() != KafkaStreams.State.RUNNING) throw new Exception("KafkaStreams not running");
         String storeName;
         if (byUser) storeName = "sentiment-by-day-table-store-group2";
         else storeName = "sentiment-by-day-user-table-store-group2";
         return sentimentByDate(streams, storeName, 1L);
     }
+
+    // public static List<HashMap<String, Long>> mostPopularHashtagsBy(KafkaStreams streams, String period) {}
 
     /**
      * Get a list of sentiments for a date range
